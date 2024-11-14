@@ -10,8 +10,8 @@ ui <- function() {
   txtBoolVal = setNames(c(TRUE,FALSE),c("YES","NO"))
   
   titleTxt1 = paste0("EFMex v",packageVersion("EFMex"))
-  #titleTxt2 = paste0("(running on EFM v",packageVersion("euroformix"),")")
-  titleTxt = paste(titleTxt1)#,titleTxt2)
+  titleTxt2 = paste0("(using EFM v",packageVersion("euroformix"),")")
+  titleTxt = paste(titleTxt1,titleTxt2)
   
   fluidPage(
     shinybusy::add_busy_spinner(spin = "cube-grid",color = "#1D6FB3",position=c("full-page"),height = "120px", width = "120px"),
@@ -46,14 +46,14 @@ ui <- function() {
               column(2, offset=0, conditionalPanel("output.hide_moresettingspanel",
                wellPanel(          
                  h4("More settings"),
-                 numericInput("nDone", "Num. Optimis.:", min=0, value = 3, step=1),
-                 numericInput("steptol", "StepTolerance:", min=0, value = 1e-3, step=1e-4),
-                 numericInput("seed", "Set seed:", min=0, value = NA, step=1),
+                 numericInput("nDone", "Num. Optims.:", min=0, value = 3, step=1),
+                 numericInput("steptol", "StepTolerance:", min=0, value = 1e-4, step=1e-4),
                  numericInput("minF", "Minimum Freq.:", min=0, value = NA, step=0.001),
                  radioButtons("normalize", "Normalize Freq.",choices=txtBoolVal, selected = txtBoolVal[1], inline = TRUE),
                  radioButtons("adjQbp", "Adjust Q-frag.",choices=txtBoolVal, selected = txtBoolVal[2], inline = TRUE),
                  textInput("priorBWS","BW stutter prior. function(x) = ", width = 250),
-                 textInput("priorFWS","FW stutter prior. function(x) = ", width = 250)
+                 textInput("priorFWS","FW stutter prior. function(x) = ", width = 250),
+                 numericInput("seed", "Set seed:", min=0, value = NA, step=1)
                ))),
         )
       ),
@@ -63,8 +63,8 @@ ui <- function() {
             sidebarPanel(
               h4("Import files"),
               fileInput("popFile", "Choose Population frequency File", multiple = FALSE, accept = acceptFile),
-              fileInput("evidFile", "Choose Evidence File(s)", multiple = TRUE, accept = acceptFile),
-              fileInput("refFile", "Choose Reference File(s)", multiple = TRUE, accept = acceptFile),
+              fileInput("evidFile", "Choose Evidence File(s)", multiple = FALSE, accept = acceptFile),
+              fileInput("refFile", "Choose Reference File(s)", multiple = FALSE, accept = acceptFile),
               actionButton("showData", "Press to show data"),
               
               h4("Conditonal Refs"),

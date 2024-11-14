@@ -1,12 +1,12 @@
 Package: EFMex
 Type: Package
 Title: Calculating LR for Exhaustive Hypotheses
-Version: 0.7.0
+Version: 0.8.1
 Author: Oyvind Bleka
 Maintainer:  Oyvind Bleka <oyvble@hotmail.com>
 Description: A GUI wrapper of EuroForMix for calculating LR considering multiple Person of Interests
 License: GPL-3
-Imports: euroformix, shiny, gtools, shinybusy
+Imports: euroformix, shiny, gtools, shinybusy, DT
 Encoding: UTF-8
 NeedsCompilation: no
 Packaged: 2022-08-11 13:15:30 UTC; oyvbl
