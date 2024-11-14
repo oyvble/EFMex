@@ -97,7 +97,7 @@ server = function(input, output, session) {
     refFile = input$refFile$datapath
     evidFile = input$evidFile$datapath
     refTable = NULL
-    if(!is.null(popFile)) output$showFreqTable = renderDataTable(euroformix::tableReader(popFile))
+    if(!is.null(popFile)) output$showFreqTable = DT::renderDT(euroformix::tableReader(popFile))
     if(!is.null(refFile)) {
       refTable = euroformix::tableReader(refFile)
       output$showRefTable  = renderTable(refTable)
@@ -158,7 +158,6 @@ server = function(input, output, session) {
     print("NOT IMPLEMENTED")
   })
 
-  allSameAs =
   #Trigger main calculations (loads settings)
   observeEvent(input$calcButton,{
     
@@ -234,10 +233,10 @@ server = function(input, output, session) {
     #print(calcObj$hypCalcs)
     resLRtable <<- getTableFormat(calcObj$LRtable)
     resHypCalcs <<- getTableFormat(calcObj$hypCalcs)
-    mleFit <<- calcObj$mleFit #store objects
+    mleFit <<- calcObj$mleFit #store fitted object (used to export results)
     
     output$showLRtable = renderTable(resLRtable)
-    output$showCalcs = renderDataTable(resHypCalcs)
+    output$showCalcs = DT::renderDT(resHypCalcs)
   })
 
 }
