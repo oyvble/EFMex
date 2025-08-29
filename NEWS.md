@@ -1,11 +1,26 @@
 
-Issues:
-- AT=50 cannot be changed (introduced with dye-specific settings). Fixed in v0.7.
 
 Future TODO:
 - Add save/load project files (based on RDS formats)
 
+v0.9.0 (Release date: 2024-08-05)
+=============================================
+ - Pre-step LR threshold (LR=1) is now turned off by default 
+	- Option was added to settings.
+	- Modified LRthresh argument in calculateExhaustive.
+ - The exhaustive calculation can now adjust for number of sub-hypotheses 
+	- Option was added to settings (adjustNumSubHyps
+ 	- Added adjustNumSubHyps argument in calculateExhaustive.
 
+ - Included whether used or not in "Download Settings" file
+ 
+ - The user must now choose between LRex and GLR
+ - Added option to calculate Shaving Method as an output
+ 
+ - Fixed the print out of "Peeling out reference" issue in case of more than one
+
+ - dataTableOutput replaced with DT::DTOutput
+ 
 v0.8.1 (Release date: 2024-11-04)
 =============================================
  - Added the Generalized LR (GLR) in addition to the exhaustive and conventional:

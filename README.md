@@ -4,4 +4,4 @@ NB: Requires euroformix R-package installed (see www.euroformix.com)
 
 Installation for Windows: Open R (v4.2.x) and write
 install.packages(c('DT','shiny','gtools','shinybusy','devtools'))
-devtools::install_github("oyvble/EFMex")
+devtools::install_github('oyvble/EFMex')

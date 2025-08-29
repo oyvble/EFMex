@@ -1,3 +1,4 @@
 importFrom("stats", "setNames")
 importFrom("utils", "packageVersion", "write.table")
-exportPattern("^[[:alpha:]]+")
+export(calculateExhaustive)
+export(app)

@@ -45,19 +45,24 @@ server = function(input, output, session) {
     },
     content = function(file) {
       if(is.null(mleFit)) return(NULL)
+      YesNo = function(x) ifelse(x,"YES","NO")
       model = mleFit[[1]]$model
+      extra = mleFit[[1]]$extra #added settings
       txt = "Model settings used in calculations:"
       txt <- paste0(txt,"\nEvidence(s)=",paste0(names(model$samples),collapse="/"))
-      txt <- paste0(txt,"\nMarkers=",paste0(names(model$popFreq),collapse="/"))
-      txt <- paste0(txt,"\nDetection threshold=",paste0(model$threshT,collapse="/"))
+      txt <- paste0(txt,"\nNumber of contributors=",mleFit[[1]]$NOC)
       txt <- paste0(txt,"\nFst-correction=",paste0(model$fst,collapse="/"))
-      txt <- paste0(txt,"\nProbability of drop-in=",paste0(model$prC,collapse="/"))
-      txt <- paste0(txt,"\nHyperparam lambda=",paste0(model$lambda,collapse="/"))
-      txt <- paste0(txt,"\nDegradation:", ifelse(model$DEG,"YES","NO")) 
-      txt <- paste0(txt,"\nBackward Stutter:",ifelse(model$BWS,"YES","NO")) 
-      txt <- paste0(txt,"\nForward Stutter:",ifelse(model$FWS,"YES","NO"))
+      txt <- paste0(txt,"\nDegradation:", YesNo(model$DEG)) 
+      txt <- paste0(txt,"\nBackward Stutter:",YesNo(model$BWS))
+      txt <- paste0(txt,"\nForward Stutter:",YesNo(model$FWS))
       txt <- paste0(txt,"\nBackward Stutter prop. prior=",paste0(deparse(eval(model$priorBWS)),collapse="") )
       txt <- paste0(txt,"\nForward Stutter prop. prior=",paste0(deparse(eval(model$priorFWS)),collapse="") )
+      txt <- paste0(txt,"\nConventional LR prefilter used:",YesNo(extra[1]))
+      txt <- paste0(txt,"\nAdjusted Exhaustive LR used:",YesNo(extra[2]))
+      txt <- paste0(txt,"\nMarkers=",paste0(names(model$popFreq),collapse="/"))
+      txt <- paste0(txt,"\nDetection threshold=",paste0(model$threshT,collapse="/"))
+      txt <- paste0(txt,"\nProbability of drop-in=",paste0(model$prC,collapse="/"))
+      txt <- paste0(txt,"\nHyperparam lambda=",paste0(model$lambda,collapse="/"))
       write.table(txt, file, sep=";", col.names=FALSE, row.names=FALSE, quote=FALSE,na="")
     }
   ) 
@@ -158,6 +163,33 @@ server = function(input, output, session) {
     print("NOT IMPLEMENTED")
   })
 
+  
+  #The following two events are closely linked: they both input to a function
+  defaultMethod = "Exhaustive"
+  observeEvent(input$selectMethod,{
+    if(is.null(resLRtable)) return(NULL)
+    useExhaustiveMethod = inputLogic(input$selectMethod==defaultMethod) #whether conventional LR=1 should be used as a pre-filter
+    addShaving = inputLogic(input$addShaving) #whether shaving method results should be shown
+    adjustNumSubHyps = inputLogic(input$adjustNumSubHyps) #whether number of hypotheses should be accounted for
+    
+    methodShow = defaultMethod
+    if(!useExhaustiveMethod) methodShow = "GLR"
+    resLRtable <<- getTableFormat(calcFromTable(resHypCalcs[,1:(nrow(resLRtable)+1),drop=FALSE], methodShow, addShaving,adjustNumSubHyps))
+    output$showLRtable = renderTable(resLRtable)
+  })
+  
+  observeEvent(input$addShaving,{
+    if(is.null(resLRtable)) return(NULL)
+    useExhaustiveMethod = inputLogic(input$selectMethod==defaultMethod) #whether conventional LR=1 should be used as a pre-filter
+    addShaving = inputLogic(input$addShaving) #whether shaving method results should be shown
+    adjustNumSubHyps = inputLogic(input$adjustNumSubHyps) #whether number of hypotheses should be accounted for
+    
+    methodShow = defaultMethod
+    if(!useExhaustiveMethod) methodShow = "GLR"
+    resLRtable <<- getTableFormat(calcFromTable(resHypCalcs[,1:(nrow(resLRtable)+1),drop=FALSE], methodShow, addShaving,adjustNumSubHyps))
+    output$showLRtable = renderTable(resLRtable)
+  })
+  
   #Trigger main calculations (loads settings)
   observeEvent(input$calcButton,{
     
@@ -196,11 +228,14 @@ server = function(input, output, session) {
     useBW = inputLogic(input$useBW)
     useFW = inputLogic(input$useFW)
 
+    #Obtain Run strategy settings
+    usePreFilter = inputLogic(input$preFilter) #whether conventional LR=1 should be used as a pre-filter
+    adjustNumSubHyps = inputLogic(input$adjustNumSubHyps) #whether number of hypotheses should be accounted for
+    
     #Obtain (other) settings
     seed = inputNumeric(input$seed,TRUE)
     nDone = inputNumeric(input$nDone)
     steptol = inputNumeric(input$steptol)
-
     minF = inputNumeric(input$minF,TRUE)
     normalize=inputLogic(input$normalize)
     adjQbp=inputLogic(input$adjQbp)
@@ -222,21 +257,34 @@ server = function(input, output, session) {
     samples = evidData
     print("CALCULATING...")
     time = system.time({
-    calcObj = calculateExhaustive(samples,refData, popFreq, NOC, kit,  condRefs, #data settings
+      LRthresh = NULL
+      if(usePreFilter) LRthresh=1 #ordinary scale used
+      calcObj = calculateExhaustive(samples,refData, popFreq, NOC, kit,  condRefs, #data settings
                                    modelSetting = list(fst=fst, AT=ATvec, pC=pCvec, lambda=lambdavec), #model settings
                                    modelConfig = list(degrade=useDEG, stutterBW=useBW,stutterFW=useFW,priorBWS=priorBWS,priorFWS=priorFWS), #model config
                                    optimConfig = list(seed=seed,nDone=nDone, steptol=steptol, minF=minF, normalize=normalize,adjQbp=adjQbp), #optim config
-                                   storeModelFit=FALSE, verbose = TRUE)  #additional
+                                   storeModelFit=FALSE, verbose = TRUE,LRthresh=LRthresh,adjustNumSubHyps=adjustNumSubHyps)  #additional
     })[3]
     print(paste0("COMPLETED: Calculations took ",round(time)," seconds"))
     #print(calcObj$LRtable)
     #print(calcObj$hypCalcs)
-    resLRtable <<- getTableFormat(calcObj$LRtable)
-    resHypCalcs <<- getTableFormat(calcObj$hypCalcs)
-    mleFit <<- calcObj$mleFit #store fitted object (used to export results)
+    resHypCalcs <<- calcObj$hypCalcs
+    resLRtable <<- getTableFormat(calcObj$LRtable[,1:2,drop=FALSE]) #only show Conventional and Exhaustive (as earlier)
+    
+    #Storing object for exporting settings:
+    calcObj$mleFit[[1]]$extra = list(usePreFilter,adjustNumSubHyps) #storing extra settings
+    mleFit <<- calcObj$mleFit #store fitted object (used to export settings)
+    
+    #Special case when user has selected
+    useExhaustiveMethod = inputLogic(input$selectMethod==defaultMethod) #whether conventional LR=1 should be used as a pre-filter
+    addShaving = inputLogic(input$addShaving) #whether shaving method results should be shown
+    if(!useExhaustiveMethod || addShaving) { #need to adjust table if other settings are given
+      methodShow = defaultMethod
+      if(!useExhaustiveMethod) methodShow = "GLR"
+      resLRtable <<- getTableFormat(calcFromTable(resHypCalcs[,1:(nrow(resLRtable)+1),drop=FALSE], methodShow, addShaving, adjustNumSubHyps))
+    } 
     
     output$showLRtable = renderTable(resLRtable)
-    output$showCalcs = DT::renderDT(resHypCalcs)
+    output$showCalcs = DT::renderDT(getTableFormat(resHypCalcs))
   })
-
 }

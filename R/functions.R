@@ -14,9 +14,9 @@ inputFun = function(string) eval( parse(text= paste("function(x)",string)) , env
 
 
 #Obtain results and store in table and create table frame:
-getTableFormat = function(x,addRow=TRUE,dec=2) {
+getTableFormat = function(x,addRownames=TRUE,dec=2) {
   tab = round(x,dec)
-  if(addRow) tab = cbind(ID=rownames(tab),tab)
+  if(addRownames) tab = cbind(ID=rownames(tab),tab)
   rownames(tab) = NULL
   return(tab)
 }
@@ -38,143 +38,68 @@ expsum2log = function(x, maxLog=500) { #
 getjointLR = function(x,y)  (expsum2log(x) - expsum2log(y))/log(10)
 getGLR = function(x,y)  (max(x) - max(y))/log(10)
 
-#Helpfunction to calculate the LR values from manual table
-calcFromTable = function(tab) {
-  nref = ncol(tab) - 1
-  refNames = colnames(tab)[1:nref]
-  logLiks = as.numeric(unlist(tab[,nref+1]))
-  
-  outtab <-  NULL 
-  for(r in seq_along(refNames)) {
-    #  r=1
-    ref = refNames[r]
-    H1ind = tab[,r]>0
-    H2ind = tab[,r]==0
-    jointLR = getjointLR(logLiks[H1ind],logLiks[H2ind])
-    GLR = getGLR(logLiks[H1ind],logLiks[H2ind])
+#Helpfunction to calculate the LR values from manual table (also used)
+calcFromTable = function(tab,method="Exhaustive",addShaving=FALSE, adjustNumSubHyps=FALSE) {
+   
+  getOutTable = function(tab_sel) {
+    nref = ncol(tab_sel) - 1
+    refNames = colnames(tab_sel)[1:nref]
+    logLiks = as.numeric(unlist(tab_sel[,nref+1]))
     
-    #calculate default LR hypothesis:
-    H2ind = rowSums(tab[,1:nref]>0)==0 #no conditionals
-    H1ind = rowSums(tab[,setdiff(1:nref,r)]>0)==0 & !H2ind #only ref is conditoned on
-    pairLR = getjointLR(logLiks[H1ind],logLiks[H2ind])
-    new <- c(pairLR,jointLR,GLR)
-    
-    outtab = rbind(outtab, new)
-  }
-  colnames(outtab) = c("conventional","exhaustive","GLR")
-  rownames(outtab) = refNames
-  return(outtab)  
-}
-
-#Main function for calculating likelihood for exhaustive set of hypotheses
-calculateExhaustive = function(samples,refData, popFreq,NOC=3, kit="Fusion 6C",  condRefNames = NULL, #data settings
-                               modelSetting = list(AT=100,fst=0.01, pC=0.05, lambda=0.01), #model settings
-                               modelConfig = list(degrade=TRUE, stutterBW=FALSE,stutterFW=FALSE,priorBWS = NULL,priorFWS = NULL), #model config
-                               optimConfig = list(seed=NULL,nDone=3, steptol=1e-4, minF=NULL, normalize=TRUE,adjQbp=FALSE),
-                               storeModelFit=TRUE, verbose = FALSE, LRthresh=1) { #additional
-
-  doCalcMLE = function(cond,nonCond=NULL) { #CALC QUAN MLE (helpfunctions)
-    euroformix::calcMLE(NOC,samples,popFreq,refData,cond,nonCond,kit,
-                        modelConfig$degrade,modelConfig$stutterBW,modelConfig$stutterFW,
-                        modelSetting$AT, modelSetting$pC, modelSetting$lambda,modelSetting$fst,
-                        nDone=optimConfig$nDone,seed=optimConfig$seed,steptol=optimConfig$steptol,
-                        minF=optimConfig$minF, normalize=optimConfig$normalize, adjQbp=optimConfig$adjQbp,
-                        priorBWS=modelConfig$priorBWS, priorFWS=modelConfig$priorFWS, verbose=FALSE)
-  }
-
-  refNames = names(refData) #names to consider as POI
-  POIrefNames = setdiff(refNames,condRefNames) #names to consider as POI
-#  print(samples)
-#  print(refNames)
-  nRefs = length(refNames) #number of refs
-  nConds = length(condRefNames) #number of conds
-  nPOIs = length(POIrefNames) #number of POIs
-  mleFit = list() #store model fits
-  
-  if(nPOIs==0 || nConds==NOC) {
-    print("There were no traversion to be done. Returning from function...")
-    return(NULL)
-  }
-  
-  #Calculate Hd first:
-  isCond = which(refNames%in%condRefNames) #Indicate refernces that are always conditoned on
-  cond0 = rep(0,nRefs) #default condition (always)
-  cond0[isCond] = seq_len(nConds) #always conditoned like this
-  nonCond0 = setdiff(seq_len(nRefs),isCond) #references not used (non-contributors)
-
-  myprint = function(x) print(round(x,3))
-  if(verbose) print("Calculate with no (POI) conditionals...")
-  mleHd = doCalcMLE(cond0, nonCond0) #doCalcMLE(NULL, seq_len(nRefs))
-  mleFit[[1]] = mleHd #always insert this (used to obtain info)
-  logLikHd = mleHd$fit$loglik
-  param_hd = mleHd$fit$thetahat2
-  
-  #CALCULATING HP fits
-  hypCalcs = c(rep(0,nPOIs),logLik=logLikHd,param_hd) #store likelihoods in a matrix
-  #if(verbose) myprint(hypCalcs)
-  peelOffRefIdx <- peeledOff <- NULL #indicate which reference to not include in exhaustive
-  #Traverse all possible candidates: Cant exceed number of contributors
-  nCondRange = 1:min(nPOIs,NOC-nConds) #range to traverse
-  for(nCondExtra in nCondRange) { #traverse different number of contributions
-    #  nCondExtra=2
-    refCombMat = gtools::combinations(nPOIs,nCondExtra) #possible ways to combine references
-    if(verbose) print(paste0("Number of (POI) conditionals: ",nCondExtra, " (",nrow(refCombMat)," traverses)"))
-    for(refComb_idx in seq_len(nrow(refCombMat))) {
-      if(verbose) print(paste0("Iteration=",refComb_idx,":"))
-      #    refComb_idx =1
-      refCombVec = refCombMat[refComb_idx,] #obtain vector with references to include
-      if(!is.null(peelOffRefIdx) && any(peelOffRefIdx%in%refCombVec)) next
-      refUse = nonCond0[refCombVec] #which to use (adjust index for non-contriutors)
-      cond = cond0
-      cond[refUse] = seq_along(refUse) + max(cond0)
+    outtab <-  NULL 
+    for(r in seq_along(refNames)) {
+      #  r=1
+      H1ind = tab_sel[,r]>0
+      H2ind = tab_sel[,r]==0
       
-      #Calculate Hp fit:
-      nonCond = setdiff(seq_len(nRefs),which(cond>0)) #references not used
-      if(length(nonCond)==0) nonCond = NULL
-      mleHp = doCalcMLE(cond, nonCond)
-      if(storeModelFit) mleFit[[length(mleFit)+1]] = mleHp #store model fit
-      logLikHp = mleHp$fit$loglik
-      param_hp = mleHp$fit$thetahat2
-      row = c(cond[nonCond0],logLik=logLikHp,param_hp) #store conditonal of non-contributors only
-      #if(verbose) myprint(row) #show few decimals only
-      hypCalcs = rbind(hypCalcs, row)
-      #plotTopEPG2(mleHp)
-    }
-    
-    #Special handling when conditioning on 1 extra: possible to peel off situations when a reference  which does not fit is considered in the hypothesis
-    if(nCondExtra==1) {
-      #Obtain conventional LR for all POIs:
-      logLiks = hypCalcs[,nPOIs+1] 
-      pairwiseLRs = exp(logLiks[-1] - logLiks[1]) #calculate pairwise
-      peelOffRefIdx = which(pairwiseLRs<LRthresh) #dont continue with those with small LR
-      if(length(peelOffRefIdx)>0) {
-        peeledOff = POIrefNames[peelOffRefIdx]
-        if(verbose) print(paste0("Pealing off following references: ",paste0(peeledOff,sep="/")))
+      GLR <- jointLR <- pairLR <- NaN
+      nHypsH1 = sum(H1ind) #number of subhypotheses in H1
+      nHypsH2 = sum(H2ind) #number of subhypotheses in H2
+      if(nHypsH1>0 && nHypsH2>0) {
+        GLR = getGLR(logLiks[H1ind],logLiks[H2ind])
+        jointLR = getjointLR(logLiks[H1ind],logLiks[H2ind])
+        if(adjustNumSubHyps) jointLR = jointLR + log10(nHypsH2) - log10(nHypsH1) #adjust for number of hypotheses
       }
+      
+      #calculate default LR hypothesis:
+      H2ind = rowSums(tab_sel[,1:nref,drop=FALSE]>0)==0 #no conditionals
+      H1ind = rowSums(tab_sel[,setdiff(1:nref,r),drop=FALSE]>0)==0 & !H2ind #only ref is conditoned on
+      if(sum(H1ind)>0 && sum(H2ind)>0) pairLR = getjointLR(logLiks[H1ind],logLiks[H2ind])
+      new <- c(pairLR,jointLR,GLR)
+      outtab = rbind(outtab, new)
     }
+    colnames(outtab) = c("Conventional","Exhaustive","GLR")
+    rownames(outtab) = refNames
+    return(outtab)
   }
-  colnames(hypCalcs) = c(POIrefNames,"logLik",names(param_hd))
-  rownames(hypCalcs) = paste0("Hyp",seq_len(nrow(hypCalcs)))
-  #CALCULATIONS DONE
 
-  lastIdx = nPOIs + 1
-  #log10LR_simple = (hypCalcs[-1,lastIdx] - hypCalcs[1,lastIdx])/log(10) #obtain pairwise
-  conventional = (hypCalcs[seq_len(nPOIs) + 1,lastIdx] - hypCalcs[1,lastIdx])/log(10) #obtain pairwise
-  exhaustive = rep(NA,nPOIs) #obtain LR for each contributor
-  GLR = rep(NA,nPOIs) #obtain LR for each contributor
-  for(refIdx in seq_len(nPOIs)) {
-    # refIdx = 1
-    indH1=hypCalcs[,refIdx]>0 #POI is contributors
-    indH2=hypCalcs[,refIdx]==0 #POI is not contributors
-    exhaustive[refIdx] = getjointLR(hypCalcs[indH1,lastIdx],hypCalcs[indH2,lastIdx])
-    GLR[refIdx] = getGLR(hypCalcs[indH1,lastIdx],hypCalcs[indH2,lastIdx])
-  }
-  names(exhaustive)  <- names(conventional) <- names(GLR) <- POIrefNames
-  LRtable = cbind(conventional, exhaustive, GLR)
-
-  #obtain table also including Parameters
-  return(list(LRtable=LRtable,hypCalcs=hypCalcs,mleFit=mleFit,peeledOff=peeledOff))
-} #end for each sample
+  outtab = getOutTable(tab) #obtain original output table
+  #Select columns to show in GUI (exhaustive or GLR)  
+  selCols = colnames(outtab)[1:2] #selected columns to show
+  selCols[2] = method #may be modified to GLR
+  outtab = outtab[,selCols,drop=FALSE] #keep as matrix
+  
+  #adding shaving method:
+  outtabExtended = outtab
+  if(addShaving) {
+    nref = nrow(outtab) #get number of references
+    
+    #Removing references with exhaustive/GLR LR<1 
+    keepRefsBool = outtab[,2]>1 #only keep those with LR>1
+    keepRefsInd = which(keepRefsBool) #get index of those to keep
+    shaveRefsInd = setdiff(seq_len(nref),keepRefsInd) #get index of those to shave
+    
+    #Update table obtained from exhaustive calculations
+    keepCols = c(keepRefsInd,ncol(tab)) #also keep last column (this is the log-likelihoods)
+    keepRows = rowSums(tab[,shaveRefsInd,drop=FALSE]>0)==0  #indicate which rows to keep
+    tabShaved = tab[keepRows,keepCols,drop=FALSE] #update table (shaved)
+    outtabShaved = getOutTable(tabShaved) #obtain original output table
+    outtabExtended = cbind(outtabExtended,Shaving=NA) #create extension of table
+    outtabExtended[keepRefsInd,3] = outtabShaved[,method] #include the shaving results
+  } 
+  
+  return(outtabExtended)  
+}
 
 writeTable = function(tableList, outfn, sig=2) {
   format = function(x) {

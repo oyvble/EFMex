@@ -8,7 +8,6 @@ ui <- function() {
   width = 2 #width of sidebar panel
   acceptFile = c("text/csv","text/comma-separated-values,text/plain",".csv") #file format accepted
   txtBoolVal = setNames(c(TRUE,FALSE),c("YES","NO"))
-  
   titleTxt1 = paste0("EFMex v",packageVersion("EFMex"))
   titleTxt2 = paste0("(using EFM v",packageVersion("euroformix"),")")
   titleTxt = paste(titleTxt1,titleTxt2)
@@ -46,6 +45,8 @@ ui <- function() {
               column(2, offset=0, conditionalPanel("output.hide_moresettingspanel",
                wellPanel(          
                  h4("More settings"),
+                 radioButtons("preFilter", "Prefilter with LR=1:", choices=txtBoolVal, selected = txtBoolVal[2], inline = TRUE),
+                 radioButtons("adjustNumSubHyps", "Adjust Exhaustive LR:", choices=txtBoolVal, selected = txtBoolVal[2], inline = TRUE),
                  numericInput("nDone", "Num. Optims.:", min=0, value = 3, step=1),
                  numericInput("steptol", "StepTolerance:", min=0, value = 1e-4, step=1e-4),
                  numericInput("minF", "Minimum Freq.:", min=0, value = NA, step=0.001),
@@ -78,7 +79,7 @@ ui <- function() {
                 tabsetPanel(
                   tabPanel("Evids", tableOutput("showEvidTable")),
                   tabPanel("Refs", tableOutput("showRefTable")),
-                  tabPanel("Freqs", dataTableOutput("showFreqTable"))
+                  tabPanel("Freqs", DT::DTOutput("showFreqTable"))
                   #tabPanel("EPG",plotly::plotlyOutput('showEPG'))
                 )
             )
@@ -114,11 +115,18 @@ ui <- function() {
               h4("More"),
               downloadButton("downloadSettings", "Download settings"),
               
+              #shinyjs::hidden(div( # initially hidden
+              #    id = "LRresultOptions",  # we will show this later
+               h4("LR results"),
+               radioButtons("selectMethod", "Choose LR output:", choices=c("Exhaustive","GLR"), selected = "Exhaustive", inline = TRUE),
+              radioButtons("addShaving", "Show Shaving Results:", choices=txtBoolVal, selected = txtBoolVal[2], inline = TRUE),
+              #)),
+              
               width=width), 
-            mainPanel(
+              mainPanel(
               tabsetPanel(
                 tabPanel("LR summary", tableOutput("showLRtable")),
-                tabPanel("Details", dataTableOutput("showCalcs"))
+                tabPanel("Details", DT::DTOutput("showCalcs"))
               )
             )
           )
